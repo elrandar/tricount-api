@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Ruff
+.ruff_cache/
+
+# Credentials (NEVER commit these)
+tricount_credentials.json
+*.credentials.json
+credentials.json
+
+# APK and decompiled source (large files, not needed in repo)
+*.apk
+*.apkm
+tricount_apk/
+tricount_src/
+jadx_dir/
+jadx.zip
+dex2jar.zip
+
+# Test data
+tricount_test.json
+
+# OS
+.DS_Store
+Thumbs.db
