@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tricount-api"
-version = "0.1.0"
+version = "0.1.1"
 description = "Unofficial Python client for the Tricount (bunq) API"
 readme = "README.md"
 license = "MIT"
