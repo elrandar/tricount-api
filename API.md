@@ -79,7 +79,7 @@ Fetch tricounts accessible to the authenticated user.
 
 | Param | Description |
 |-------|-------------|
-| `public_identifier_token` | The tricount key from URL (e.g. `tNtrpLJPityiBaOIVh`) |
+| `public_identifier_token` | The tricount key from URL (e.g. `tABC123xyz`) |
 | `registry_id` | Internal registry ID |
 | *(none)* | Returns all tricounts for the user |
 
@@ -98,7 +98,7 @@ Fetch tricounts accessible to the authenticated user.
         "category": "GENERAL",
         "status": "READ_WRITE",
         "created": "2026-03-01 10:57:38.087586",
-        "public_identifier_token": "tNtrpLJPityiBaOIVh",
+        "public_identifier_token": "tABC123xyz",
         "memberships": [...],
         "all_registry_entry": [...],
         ...
@@ -118,7 +118,7 @@ transactions as any member.
 ```json
 {
   "all_registry_active": [
-    { "public_identifier_token": "tZiTBpQSBjagpRmjrO" }
+    { "public_identifier_token": "tABC123xyz" }
   ],
   "all_registry_archived": [],
   "all_registry_deleted": []
@@ -852,7 +852,7 @@ session.headers["X-Bunq-Client-Authentication"] = token
 
 # Fetch tricount
 resp = session.get(f"https://api.tricount.bunq.com/v1/user/{user_id}/registry",
-                   params={"public_identifier_token": "tNtrpLJPityiBaOIVh"})
+                   params={"public_identifier_token": "tABC123xyz"})
 registry = resp.json()["Response"][0]["Registry"]
 print(f"{registry['title']}: {len(registry['all_registry_entry'])} entries")
 

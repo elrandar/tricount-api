@@ -388,7 +388,6 @@ class Tricount:
     emoji: Optional[str] = None
     category: Optional[str] = None
     status: str = "READ_WRITE"
-    membership_uuid_active: Optional[str] = None  # UUID of member linked to current user
 
     @classmethod
     def from_dict(cls, data: dict) -> Tricount:
@@ -415,7 +414,6 @@ class Tricount:
             emoji=data.get("emoji"),
             category=data.get("category"),
             status=data.get("status", "READ_WRITE"),
-            membership_uuid_active=data.get("membership_uuid_active"),
         )
 
     def get_member_by_name(self, name: str) -> Optional[Member]:
@@ -436,13 +434,6 @@ class Tricount:
     def is_archived(self) -> bool:
         """Check if tricount is archived (read-only)"""
         return self.status == TricountStatus.READ_ONLY.value
-
-    @property
-    def linked_member(self) -> Optional[Member]:
-        """Get the member linked to the current user's account, if any"""
-        if self.membership_uuid_active:
-            return self.get_member_by_uuid(self.membership_uuid_active)
-        return None
 
 
 # =============================================================================
@@ -552,13 +543,7 @@ class TricountAPI:
     # -------------------------------------------------------------------------
 
     def get_tricount(self, public_token: str) -> Tricount:
-        """
-        Fetch a tricount by its public sharing token.
-
-        Note: This returns read-only data. Use join_tricount() first if you
-        need to modify the tricount. The membership_uuid_active field will
-        only be populated for tricounts you've joined.
-        """
+        """Fetch a tricount by its public sharing token"""
         self._ensure_authenticated()
         resp = self.session.get(
             f"{BASE_URL}/v1/user/{self.user_id}/registry",
@@ -572,90 +557,6 @@ class TricountAPI:
                 return Tricount.from_dict(item["Registry"])
 
         raise RuntimeError("No tricount found")
-
-    def get_tricount_by_id(self, tricount_id: int) -> Tricount:
-        """
-        Fetch a tricount by its ID.
-
-        This only works for tricounts that have been synced to your account
-        (via join_tricount or create_tricount). Returns full data including
-        membership_uuid_active.
-        """
-        self._ensure_authenticated()
-        resp = self.session.get(f"{BASE_URL}/v1/user/{self.user_id}/registry")
-        resp.raise_for_status()
-        data = resp.json()
-
-        for item in data["Response"]:
-            if "Registry" in item and item["Registry"].get("id") == tricount_id:
-                return Tricount.from_dict(item["Registry"])
-
-        raise RuntimeError(f"No tricount found with ID {tricount_id}")
-
-    def join_tricount(self, public_token: str) -> Tricount:
-        """
-        Join a tricount by its public sharing token.
-
-        This syncs the tricount to your account, allowing you to create/edit
-        transactions even if you weren't originally a member. Anyone with the
-        sharing link can join.
-
-        Args:
-            public_token: The public sharing token (e.g., 'tABC123xyz')
-
-        Returns:
-            The joined Tricount object (now accessible via list_tricounts)
-        """
-        self._ensure_authenticated()
-
-        # Sync the tricount to our account using registry-synchronization
-        payload = {
-            "all_registry_active": [{"public_identifier_token": public_token}],
-            "all_registry_archived": [],
-            "all_registry_deleted": [],
-        }
-
-        resp = self.session.post(
-            f"{BASE_URL}/v1/user/{self.user_id}/registry-synchronization",
-            json=payload,
-        )
-        resp.raise_for_status()
-
-        # Get the tricount ID from sync response and return full data
-        sync_data = resp.json()
-        for item in sync_data.get("Response", []):
-            if "RegistrySynchronization" in item:
-                for registry in item["RegistrySynchronization"].get("all_registry_active", []):
-                    if registry.get("public_identifier_token") == public_token:
-                        return Tricount.from_dict(registry)
-
-        # Fallback to get_tricount if we can't find it in sync response
-        return self.get_tricount(public_token)
-
-    def leave_tricount(self, tricount: Tricount) -> None:
-        """
-        Leave a tricount (remove it from your account).
-
-        This doesn't delete the tricount or affect other users - it just
-        removes it from your synced list. You can re-join anytime using
-        join_tricount() with the sharing token.
-
-        Args:
-            tricount: The tricount to leave
-        """
-        self._ensure_authenticated()
-
-        payload = {
-            "all_registry_active": [],
-            "all_registry_archived": [],
-            "all_registry_deleted": [{"public_identifier_token": tricount.public_identifier_token}],
-        }
-
-        resp = self.session.post(
-            f"{BASE_URL}/v1/user/{self.user_id}/registry-synchronization",
-            json=payload,
-        )
-        resp.raise_for_status()
 
     def create_tricount(self, title: str, currency: str, description: str = "") -> int:
         """Create a new tricount and return its ID"""
@@ -886,24 +787,6 @@ class TricountAPI:
         )
         resp.raise_for_status()
 
-    def link_to_member(self, tricount: Tricount, member: Member) -> None:
-        """
-        Link your account to a member in the tricount.
-
-        This makes you "become" that member in the tricount. The Tricount app
-        uses this to identify which member you are when you open a shared tricount.
-
-        Args:
-            tricount: The tricount to update
-            member: The member to link your account to
-        """
-        self._ensure_authenticated()
-        resp = self.session.put(
-            f"{BASE_URL}/v1/user/{self.user_id}/registry/{tricount.id}",
-            json={"membership_uuid_active": member.uuid},
-        )
-        resp.raise_for_status()
-
     # -------------------------------------------------------------------------
     # Transaction Operations
     # -------------------------------------------------------------------------
@@ -963,7 +846,9 @@ class TricountAPI:
         # Calculate amounts in both currencies
         amount_in_tricount_currency = amount * rate if currency else amount
         amount_per_person_local = round(amount / len(split_among), 2)
-        amount_per_person_tricount = round(amount_in_tricount_currency / len(split_among), 2)
+        amount_per_person_tricount = round(
+            amount_in_tricount_currency / len(split_among), 2
+        )
 
         allocations = []
         for member in split_among:
@@ -1409,7 +1294,9 @@ class TricountAPI:
         new_description = description if description is not None else tx.description
         new_amount = amount if amount is not None else float(tx.amount.value)
         new_payer = (
-            payer if payer is not None else tricount.get_member_by_uuid(tx.membership_uuid_owner)
+            payer
+            if payer is not None
+            else tricount.get_member_by_uuid(tx.membership_uuid_owner)
         )
         new_date = (
             date
@@ -1528,7 +1415,8 @@ class TricountAPI:
         for entry in data["Response"][0]["Registry"].get("all_registry_entry", []):
             if entry.get("RegistryEntry", {}).get("id") == transaction_id:
                 current_attachments = [
-                    {"id": a["id"]} for a in entry["RegistryEntry"].get("attachment", [])
+                    {"id": a["id"]}
+                    for a in entry["RegistryEntry"].get("attachment", [])
                 ]
                 break
 
@@ -1672,7 +1560,9 @@ class TricountAPI:
         """
         rates = self.get_exchange_rates(from_currency)
         if to_currency not in rates:
-            raise ValueError(f"Exchange rate not found for {from_currency} -> {to_currency}")
+            raise ValueError(
+                f"Exchange rate not found for {from_currency} -> {to_currency}"
+            )
         return rates[to_currency]
 
     # -------------------------------------------------------------------------
@@ -1819,7 +1709,9 @@ class TricountAPI:
         attachments = []
         for item in data.get("Response", []):
             if "RegistryGalleryAttachment" in item:
-                attachments.append(GalleryAttachment.from_dict(item["RegistryGalleryAttachment"]))
+                attachments.append(
+                    GalleryAttachment.from_dict(item["RegistryGalleryAttachment"])
+                )
         return attachments
 
     def upload_gallery_attachment(
@@ -1876,7 +1768,9 @@ class TricountAPI:
 
         return attachment_uuid
 
-    def delete_gallery_attachment(self, tricount: Tricount, attachment_uuid: str) -> None:
+    def delete_gallery_attachment(
+        self, tricount: Tricount, attachment_uuid: str
+    ) -> None:
         """
         Delete a gallery attachment.
 
@@ -2016,10 +1910,9 @@ class TricountAPI:
 
 
 def load_client(
-    credentials_path: str | Path = "tricount_credentials.json",
+    credentials_path: Path = Path("tricount_credentials.json"),
 ) -> TricountAPI:
     """Load credentials and create an authenticated client"""
-    credentials_path = Path(credentials_path)
     if credentials_path.exists():
         creds = Credentials.load(credentials_path)
     else:

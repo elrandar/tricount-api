@@ -13,11 +13,7 @@ An unofficial Python client for the Tricount (bunq) API, reverse-engineered from
 ## Installation
 
 ```bash
-# From PyPI (coming soon)
 pip install tricount-api
-
-# From source
-pip install -e .
 ```
 
 ## Quick Start
@@ -29,7 +25,7 @@ from tricount import load_client
 client = load_client()
 
 # Join any tricount using its sharing link - no need to be a member!
-tricount = client.join_tricount("tZiTBpQSBjagpRmjrO")
+tricount = client.join_tricount("tABC123xyz")
 
 print(f"Tricount: {tricount.title}")
 print(f"Members: {[m.display_name for m in tricount.members]}")
@@ -96,7 +92,7 @@ You don't need to be an existing member - anyone with the link can make changes.
 
 ```python
 # Join a tricount by its sharing token (from the URL: tricount.com/tXXXXX)
-tricount = client.join_tricount("tZiTBpQSBjagpRmjrO")
+tricount = client.join_tricount("tABC123xyz")
 
 # Now you can create/edit/delete transactions as any member
 # The bot doesn't need to be added as a member
