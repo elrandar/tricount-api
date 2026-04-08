@@ -31,6 +31,28 @@ REQUEST_ID = "049bfcdf-6ae4-4cee-af7b-45da31ea85d0"
 
 
 # =============================================================================
+# Helper Functions
+# =============================================================================
+
+
+def _extract_id(response_json: dict[str, object]) -> int:
+    """Extract the ID from a standard API response.
+
+    The API typically returns: {"Response": [{"Id": {"id": 12345}}]}
+    """
+    response = response_json.get("Response")
+    if not isinstance(response, list) or not response:
+        raise ValueError(f"Unexpected response format: {response_json}")
+    first_item = response[0]
+    if not isinstance(first_item, dict):
+        raise ValueError(f"Unexpected response format: {response_json}")
+    id_obj = first_item.get("Id")
+    if not isinstance(id_obj, dict):
+        raise ValueError(f"Unexpected response format: {response_json}")
+    return int(id_obj["id"])
+
+
+# =============================================================================
 # Enums
 # =============================================================================
 
@@ -122,16 +144,32 @@ class Category(str, Enum):
 
 @dataclass
 class Amount:
-    """Monetary amount"""
+    """
+    Monetary amount.
+
+    Note: The API returns amounts as strings. Expenses are negative values,
+    income/reimbursements are positive. Values are in full currency units
+    (e.g., "1500" means 1500 JPY or 15.00 EUR), NOT cents.
+    """
 
     value: str
     currency: str
 
-    def to_dict(self) -> dict:
+    @property
+    def as_float(self) -> float:
+        """Get the amount as a float (preserves sign: negative for expenses)."""
+        return float(self.value)
+
+    @property
+    def as_abs(self) -> float:
+        """Get the absolute amount as a float (always positive)."""
+        return abs(float(self.value))
+
+    def to_dict(self) -> dict[str, str]:
         return {"value": self.value, "currency": self.currency}
 
     @classmethod
-    def from_dict(cls, data: dict) -> Amount:
+    def from_dict(cls, data: dict[str, str]) -> Amount:
         return cls(value=data.get("value", "0"), currency=data.get("currency", ""))
 
     def __str__(self) -> str:
@@ -147,14 +185,28 @@ class Member:
     display_name: str
     status: str = "ACTIVE"
 
+    @property
+    def membership_uuid(self) -> str:
+        """
+        Alias for uuid, for consistency with Transaction.membership_uuid_owner
+        and Allocation.membership_uuid.
+        """
+        return self.uuid
+
     @classmethod
-    def from_dict(cls, data: dict) -> Member:
-        alias = data.get("alias", {})
+    def from_dict(cls, data: dict[str, object]) -> Member:
+        alias = data.get("alias")
+        if not isinstance(alias, dict):
+            alias = {}
+        id_val = data.get("id", 0)
+        uuid_val = data.get("uuid", "")
+        status_val = data.get("status", "ACTIVE")
+        display_name_val = alias.get("display_name", uuid_val)
         return cls(
-            id=data.get("id", 0),
-            uuid=data.get("uuid", ""),
-            display_name=alias.get("display_name", data.get("uuid", "")),
-            status=data.get("status", "ACTIVE"),
+            id=int(str(id_val)) if id_val else 0,
+            uuid=str(uuid_val) if uuid_val else "",
+            display_name=str(display_name_val) if display_name_val else "",
+            status=str(status_val) if status_val else "ACTIVE",
         )
 
 
@@ -167,8 +219,8 @@ class Allocation:
     allocation_type: AllocationType = AllocationType.AMOUNT
     share_ratio: Optional[int] = None
 
-    def to_dict(self) -> dict:
-        result = {
+    def to_dict(self) -> dict[str, object]:
+        result: dict[str, object] = {
             "membership_uuid": self.membership_uuid,
             "amount": self.amount.to_dict(),
             "type": self.allocation_type.value,
@@ -527,15 +579,15 @@ class TricountAPI:
         resp.raise_for_status()
         data = resp.json()
 
-        token = None
-        user_id = None
+        token: Optional[str] = None
+        user_id: Optional[int] = None
         for item in data["Response"]:
             if "Token" in item:
-                token = item["Token"]["token"]
+                token = str(item["Token"]["token"])
             if "UserPerson" in item:
-                user_id = item["UserPerson"]["id"]
+                user_id = int(item["UserPerson"]["id"])
 
-        if not token or not user_id:
+        if not token or user_id is None:
             raise RuntimeError(f"Failed to authenticate: {data}")
 
         self.session.headers["X-Bunq-Client-Authentication"] = token
@@ -592,7 +644,7 @@ class TricountAPI:
 
         raise RuntimeError(f"No tricount found with ID {tricount_id}")
 
-    def join_tricount(self, public_token: str) -> Tricount:
+    def join_tricount(self, public_token: str, fetch_full: bool = True) -> Tricount:
         """
         Join a tricount by its public sharing token.
 
@@ -602,6 +654,9 @@ class TricountAPI:
 
         Args:
             public_token: The public sharing token (e.g., 'tABC123xyz')
+            fetch_full: If True (default), fetches full tricount data including
+                all transactions. If False, returns only basic info from the
+                sync response (faster but no transactions).
 
         Returns:
             The joined Tricount object (now accessible via list_tricounts)
@@ -621,13 +676,25 @@ class TricountAPI:
         )
         resp.raise_for_status()
 
-        # Get the tricount ID from sync response and return full data
+        # Get the tricount ID from sync response
         sync_data = resp.json()
+        tricount_id: Optional[int] = None
+        basic_tricount: Optional[Tricount] = None
+
         for item in sync_data.get("Response", []):
             if "RegistrySynchronization" in item:
                 for registry in item["RegistrySynchronization"].get("all_registry_active", []):
                     if registry.get("public_identifier_token") == public_token:
-                        return Tricount.from_dict(registry)
+                        basic_tricount = Tricount.from_dict(registry)
+                        tricount_id = basic_tricount.id
+                        break
+
+        if fetch_full and tricount_id is not None:
+            # Fetch full data including all transactions
+            return self.get_tricount_by_id(tricount_id)
+
+        if basic_tricount is not None:
+            return basic_tricount
 
         # Fallback to get_tricount if we can't find it in sync response
         return self.get_tricount(public_token)
@@ -666,7 +733,7 @@ class TricountAPI:
         )
         resp.raise_for_status()
         data = resp.json()
-        return data["Response"][0]["Id"]["id"]
+        return _extract_id(data)
 
     def list_tricounts(self) -> list[Tricount]:
         """
@@ -1017,7 +1084,7 @@ class TricountAPI:
             json=payload,
         )
         resp.raise_for_status()
-        return resp.json()["Response"][0]["Id"]["id"]
+        return _extract_id(resp.json())
 
     def create_transaction_custom_split(
         self,
@@ -1093,7 +1160,7 @@ class TricountAPI:
             json=payload,
         )
         resp.raise_for_status()
-        return resp.json()["Response"][0]["Id"]["id"]
+        return _extract_id(resp.json())
 
     def delete_transaction(self, tricount: Tricount, transaction_id: int) -> None:
         """Delete a transaction"""
@@ -1185,7 +1252,7 @@ class TricountAPI:
             json=payload,
         )
         resp.raise_for_status()
-        return resp.json()["Response"][0]["Id"]["id"]
+        return _extract_id(resp.json())
 
     def create_transaction_ratio_split(
         self,
@@ -1305,7 +1372,7 @@ class TricountAPI:
             json=payload,
         )
         resp.raise_for_status()
-        return resp.json()["Response"][0]["Id"]["id"]
+        return _extract_id(resp.json())
 
     def create_reimbursement(
         self,
@@ -1364,7 +1431,7 @@ class TricountAPI:
             json=payload,
         )
         resp.raise_for_status()
-        return resp.json()["Response"][0]["Id"]["id"]
+        return _extract_id(resp.json())
 
     def edit_transaction(
         self,
@@ -1421,6 +1488,7 @@ class TricountAPI:
             raise ValueError("Could not determine payer")
 
         # Build allocations
+        allocations: list[dict[str, object]]
         if split_among is not None:
             amount_per_person = round(new_amount / len(split_among), 2)
             allocations = [
@@ -1436,11 +1504,11 @@ class TricountAPI:
             ]
         elif amount is not None:
             # Amount changed but split_among not specified - reuse existing allocation members
-            existing_members = [
-                tricount.get_member_by_uuid(a.membership_uuid)
-                for a in tx.allocations
-                if tricount.get_member_by_uuid(a.membership_uuid)
-            ]
+            existing_members: list[Member] = []
+            for a in tx.allocations:
+                member = tricount.get_member_by_uuid(a.membership_uuid)
+                if member is not None:
+                    existing_members.append(member)
             if existing_members:
                 amount_per_person = round(new_amount / len(existing_members), 2)
                 allocations = [
@@ -1767,7 +1835,7 @@ class TricountAPI:
             json={},
         )
         resp.raise_for_status()
-        return resp.json()["Response"][0]["Id"]["id"]
+        return _extract_id(resp.json())
 
     def get_settlement(self, tricount: Tricount, settlement_id: int) -> Settlement:
         """
@@ -1872,7 +1940,7 @@ class TricountAPI:
         data = resp.json()
         for item in data.get("Response", []):
             if "UUID" in item:
-                return item["UUID"]["uuid"]
+                return str(item["UUID"]["uuid"])
 
         return attachment_uuid
 
@@ -1939,7 +2007,7 @@ class TricountAPI:
             },
         )
         resp.raise_for_status()
-        return resp.json()["Response"][0]["Id"]["id"]
+        return _extract_id(resp.json())
 
     # -------------------------------------------------------------------------
     # Synchronization Operations

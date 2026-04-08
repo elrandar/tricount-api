@@ -71,9 +71,20 @@ user_id = client.authenticate()
 
 ### Amount Convention
 
-- **Expenses**: Stored as **negative** amounts (e.g., `-1000` for a ¥1000 expense)
-- **Income**: Stored as **positive** amounts
-- **The client handles this automatically** - you always pass positive amounts
+- **Expenses**: Stored as **negative** string values (e.g., `"-1000"` for a ¥1000 expense)
+- **Income**: Stored as **positive** string values
+- **Values are in full currency units**, not cents (e.g., `"1500"` = 1500 JPY or 15.00 EUR)
+- **The client handles this automatically** - you always pass positive amounts when creating transactions
+
+The `Amount` class provides helper properties for working with amounts:
+
+```python
+tx = tricount.transactions[0]
+print(tx.amount.value)      # Raw string value, e.g., "-1500"
+print(tx.amount.as_float)   # As float with sign, e.g., -1500.0
+print(tx.amount.as_abs)     # Absolute value as float, e.g., 1500.0
+print(tx.amount.currency)   # Currency code, e.g., "JPY"
+```
 
 ### Transaction Types
 
@@ -92,7 +103,11 @@ You don't need to be an existing member - anyone with the link can make changes.
 
 ```python
 # Join a tricount by its sharing token (from the URL: tricount.com/tXXXXX)
+# By default, fetches full data including all transactions
 tricount = client.join_tricount("tABC123xyz")
+
+# For faster joins when you don't need transaction history:
+tricount = client.join_tricount("tABC123xyz", fetch_full=False)
 
 # Now you can create/edit/delete transactions as any member
 # The bot doesn't need to be added as a member
@@ -454,7 +469,14 @@ class Member:
     uuid: str
     display_name: str
     status: str  # "ACTIVE", "INACTIVE", "DELETED"
+    
+    @property
+    def membership_uuid(self) -> str:
+        """Alias for uuid, for consistency with Transaction/Allocation"""
 ```
+
+Note: `Member.membership_uuid` is an alias for `Member.uuid`, provided for consistency
+with `Transaction.membership_uuid_owner` and `Allocation.membership_uuid`.
 
 ### Transaction
 

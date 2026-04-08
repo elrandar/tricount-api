@@ -5,20 +5,17 @@ An unofficial Python client for the Tricount (bunq) API.
 Based on reverse engineering of the bunq Tricount Android app.
 
 Basic usage:
-    from tricount import TricountAPI, load_client
+    from tricount import load_client
 
-    # First time - authenticate with device confirmation
-    api = TricountAPI()
-    api.register("your_email@example.com")
-    # Check email for confirmation code
-    api.confirm_device("123456")
-    api.save_credentials("credentials.json")
+    # Create authenticated client (auto-generates credentials on first use)
+    client = load_client()
 
-    # Later - load saved credentials
-    api = load_client("credentials.json")
+    # Join a tricount using its sharing link
+    tricount = client.join_tricount("tABC123xyz")
 
-    # Get your tricounts
-    tricounts = api.list_tricounts()
+    # Access transactions
+    for tx in tricount.transactions:
+        print(f"{tx.description}: {tx.amount.as_abs} {tx.amount.currency}")
 """
 
 from tricount.client import (

@@ -92,3 +92,9 @@ disallow_incomplete_defs = true
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.20.0",
+    "types-requests>=2.33.0.20260402",
+]
