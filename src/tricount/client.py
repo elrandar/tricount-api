@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -50,6 +50,11 @@ def _extract_id(response_json: dict[str, object]) -> int:
     if not isinstance(id_obj, dict):
         raise ValueError(f"Unexpected response format: {response_json}")
     return int(id_obj["id"])
+
+
+def _slug(title: str) -> str:
+    """Filesystem-safe stem from a tricount title."""
+    return "".join(c if c.isalnum() or c in "-_" else "_" for c in title) or "tricount"
 
 
 # =============================================================================
@@ -1810,6 +1815,34 @@ class TricountAPI:
                         balances[member.display_name] -= abs(float(alloc.amount.value))
 
         return balances
+
+    # -------------------------------------------------------------------------
+    # Export
+    # -------------------------------------------------------------------------
+
+    def download_tricount(
+        self,
+        public_token: str,
+        path: Optional[str | Path] = None,
+        *,
+        indent: Optional[int] = 2,
+    ) -> Path:
+        """
+        Fetch a tricount by its public token and write it to disk as JSON.
+
+        Args:
+            public_token: The tricount's public sharing token.
+            path: Destination file; defaults to "<title>.json" in the current directory.
+            indent: JSON indentation; None for compact output.
+
+        Returns:
+            The path written.
+        """
+        tricount = self.get_tricount(public_token)
+        out = Path(path) if path is not None else Path(f"{_slug(tricount.title)}.json")
+        out.write_text(json.dumps(asdict(tricount), indent=indent, ensure_ascii=False),
+                       encoding="utf-8")
+        return out
 
     # -------------------------------------------------------------------------
     # Settlement Operations

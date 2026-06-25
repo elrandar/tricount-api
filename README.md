@@ -16,6 +16,12 @@ An unofficial Python client for the Tricount (bunq) API, reverse-engineered from
 pip install tricount-api
 ```
 
+This also installs a `tricount` command-line tool. To get just the CLI :
+
+```bash
+pipx install tricount-api
+```
+
 ## Quick Start
 
 ```python
@@ -39,6 +45,46 @@ client.create_transaction(
     split_among=tricount.members
 )
 ```
+
+## Command-Line Interface
+
+Installing the package also provides a `tricount` command. Commands applying modifications are to use with care.
+Credentials, if not provided, are auto-generated on first use and saved to `tricount_credentials.json`
+in the current directory (override the path with `--creds`).
+
+Every command that targets a tricount takes its sharing token (from the URL:
+tricount.com/tABC123xyz) as the first argument.
+
+```bash
+# Create a tricount, optionally with members
+tricount create "Trip to Tokyo" JPY --member Alice --member Bob
+
+# Or join an existing one by its sharing token
+tricount join tABC123xyz
+
+# Add, rename, or remove members afterwards
+tricount member add tABC123xyz Charlie
+tricount member rename tABC123xyz Charlie "Charlie Smith"
+tricount member remove tABC123xyz Charlie
+
+# Add an expense (splits among everyone unless you pass --among)
+tricount add tABC123xyz "Dinner" 5000 Alice --among Alice --among Bob --category FOOD_AND_DRINK
+
+# Record a reimbursement (Bob pays Alice back), or delete a transaction by id
+tricount reimburse tABC123xyz Bob Alice 2500
+tricount delete-tx tABC123xyz 123
+
+# Read your data
+tricount list
+tricount balances tABC123xyz
+tricount show tABC123xyz
+
+# Save a tricount to a JSON file (<title>.json by default)
+tricount download tABC123xyz  --output my_tricount_file.json
+```
+
+Run `tricount --help` for the full list, or `tricount <command> --help` for a command's
+arguments. To generate or replace credentials explicitly, use `tricount init`.
 
 ## Authentication
 
