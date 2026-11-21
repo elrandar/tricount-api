@@ -25,7 +25,7 @@ Tricounts are public (no password), but apps must identify themselves before usi
 
 | Header | Value | Notes |
 |--------|-------|-------|
-| `User-Agent` | `com.bunq.tricount.android:RELEASE:7.0.7:3174:ANDROID:13:C` | Mimics the official Android app |
+| `User-Agent` | `com.tribab.tricount.android:RELEASE:14.9.1:500004158:ANDROID:13:C` | Mimics the official Android app |
 | `app-id` | UUID | Unique per app installation, persist across requests |
 | `X-Bunq-Client-Request-Id` | `049bfcdf-6ae4-4cee-af7b-45da31ea85d0` | Hardcoded constant from the app |
 | `X-Bunq-Client-Authentication` | Token string | Added after authentication (see below) |
@@ -837,7 +837,7 @@ pub_pem = key.public_key().public_bytes(serialization.Encoding.PEM, serializatio
 # Authenticate
 session = requests.Session()
 session.headers = {
-    "User-Agent": "com.bunq.tricount.android:RELEASE:7.0.7:3174:ANDROID:13:C",
+    "User-Agent": "com.tribab.tricount.android:RELEASE:14.9.1:500004158:ANDROID:13:C",
     "app-id": app_id,
     "X-Bunq-Client-Request-Id": "049bfcdf-6ae4-4cee-af7b-45da31ea85d0",
 }
