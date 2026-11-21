@@ -26,7 +26,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 # =============================================================================
 
 BASE_URL = "https://api.tricount.bunq.com"
-USER_AGENT = "com.bunq.tricount.android:RELEASE:7.0.7:3174:ANDROID:13:C"
+USER_AGENT = "com.tribab.tricount.android:RELEASE:14.9.1:500004158:ANDROID:13:C"
 REQUEST_ID = "049bfcdf-6ae4-4cee-af7b-45da31ea85d0"
 
 
